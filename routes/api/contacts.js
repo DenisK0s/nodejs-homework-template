@@ -1,13 +1,29 @@
 const express = require("express");
 const createError = require("http-errors");
+const { authenticate } = require("../../middlewares");
 
 const { Contact, schemas } = require("../../models/contact");
 
 const router = express.Router();
 
-router.get("/", async (req, res, next) => {
+router.get("/", authenticate, async (req, res, next) => {
   try {
-    const result = await Contact.find({}, "-createdAt -updatedAt");
+    const { page = 1, limit = 20, favorite} = req.query;
+    const skip = (page - 1) * limit;
+    const { _id } = req.user;
+
+    const contacts = await Contact.find({ owner: _id }, "-createdAt -updatedAt", {
+      skip,
+      limit: Number(limit),
+    }).populate("owner", "email");
+
+    const favoriteContacts = await Contact.find({ owner: _id, favorite: favorite }, "-createdAt -updatedAt", {
+      skip,
+      limit: Number(limit),
+    }).populate("owner", "email");
+
+    const result = favorite ? favoriteContacts : contacts;
+
     res.json(result);
   } catch (error) {
     next(error);
@@ -18,7 +34,6 @@ router.get("/:contactId", async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const result = await Contact.findById(contactId);
-    console.log(result);
     if (!result) {
       throw createError(404, "Not found");
     }
@@ -31,13 +46,14 @@ router.get("/:contactId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", authenticate, async (req, res, next) => {
   try {
     const { error } = schemas.addContact.validate(req.body);
     if (error) {
       throw createError(400, "missing required name field");
     }
-    const result = await Contact.create(req.body);
+    const data = { ...req.body, owner: req.user._id };
+    const result = await Contact.create(data);
     res.status(201).json(result);
   } catch (error) {
     if (error.message.includes("validation failed")) {
@@ -54,7 +70,9 @@ router.put("/:contactId", async (req, res, next) => {
       throw createError(400, "missing fields");
     }
     const { contactId } = req.params;
-    const result = await Contact.findByIdAndUpdate(contactId, req.body, { new: true });
+    const result = await Contact.findByIdAndUpdate(contactId, req.body, {
+      new: true,
+    });
     if (!result) {
       throw createError(404, "Not found");
     }
@@ -71,7 +89,9 @@ router.patch("/:contactId/favorite", async (req, res, next) => {
       throw createError(400, "missing fields");
     }
     const { contactId } = req.params;
-    const result = await Contact.findByIdAndUpdate(contactId, req.body, { new: true });
+    const result = await Contact.findByIdAndUpdate(contactId, req.body, {
+      new: true,
+    });
     if (!result) {
       throw createError(404, "Not found");
     }
