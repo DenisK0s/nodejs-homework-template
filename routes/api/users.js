@@ -33,4 +33,10 @@ router.patch(
 // /api/users/current
 router.get("/current", authenticate, ctrls.getCurrentUser);
 
+// /api/users/verify
+router.post("/verify", ctrls.reVerifyUser);
+
+// /api/users/verify/:verificationToken
+router.get("/verify/:verificationToken", ctrls.verifyUserByEmail);
+
 module.exports = router;
